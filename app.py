@@ -863,6 +863,13 @@ def refresh_data():
             'status': 'success',
             'message': 'Data refreshed successfully',
             'timestamp': cached_data['last_update'].strftime('%Y-%m-%d %H:%M:%S IST'),
+            'data': {
+                'nifty_50': cached_data['nifty_50'],
+                'bank_nifty': cached_data['bank_nifty'],
+                'pcr_data': cached_data['pcr_data'],
+                'nifty_futures': cached_data['nifty_futures'],
+                'bank_futures': cached_data['bank_futures']
+            },
             'data_counts': {
                 'nifty_50': len(cached_data['nifty_50']),
                 'bank_nifty': len(cached_data['bank_nifty']),
