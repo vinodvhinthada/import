@@ -208,7 +208,11 @@ cached_data = {
     'pcr_data': None,
     'last_update': None,
     'auth_token': None,
-    'historical_oi_cache': {}  # Cache for historical OI data
+    'historical_oi_cache': {},  # Cache for historical OI data
+    'chart_data': {  # Store historical data for charts
+        'nifty_futures_history': [],
+        'bank_futures_history': []
+    }
 }
 
 # Updated Nifty 50 Token Mapping with New Weightages (October 2025) - COMPLETE 47 STOCKS
@@ -806,6 +810,71 @@ def get_data(data_type):
         })
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+@app.route('/api/chart-data')
+def get_chart_data():
+    """Get historical chart data for futures"""
+    try:
+        # Get current futures data
+        nifty_futures = cached_data.get('nifty_futures', [])
+        bank_futures = cached_data.get('bank_futures', [])
+        
+        # Calculate current meter values
+        nifty_meter = calculate_meter_value(nifty_futures) if nifty_futures else 0
+        bank_meter = calculate_meter_value(bank_futures) if bank_futures else 0
+        
+        # Get impact status
+        nifty_impact = get_meter_status(nifty_meter)
+        bank_impact = get_meter_status(bank_meter)
+        
+        # Get current timestamp
+        current_time = get_ist_time()
+        timestamp = current_time.strftime('%H:%M')
+        
+        # Add current data to history (limit to last 100 points)
+        if nifty_futures and bank_futures:
+            # Store chart data point
+            chart_point = {
+                'timestamp': timestamp,
+                'time_full': current_time.strftime('%Y-%m-%d %H:%M:%S'),
+                'nifty_meter': round(nifty_meter, 3),
+                'bank_meter': round(bank_meter, 3),
+                'nifty_impact': nifty_impact,
+                'bank_impact': bank_impact
+            }
+            
+            # Update history arrays
+            nifty_history = cached_data['chart_data']['nifty_futures_history']
+            bank_history = cached_data['chart_data']['bank_futures_history']
+            
+            # Add current point and keep last 100 points
+            nifty_history.append(chart_point)
+            bank_history.append(chart_point)
+            
+            if len(nifty_history) > 100:
+                nifty_history.pop(0)
+            if len(bank_history) > 100:
+                bank_history.pop(0)
+        
+        return jsonify({
+            'status': 'success',
+            'nifty_futures_history': cached_data['chart_data']['nifty_futures_history'],
+            'bank_futures_history': cached_data['chart_data']['bank_futures_history'],
+            'current': {
+                'nifty_meter': round(nifty_meter, 3),
+                'bank_meter': round(bank_meter, 3),
+                'nifty_impact': nifty_impact,
+                'bank_impact': bank_impact,
+                'timestamp': timestamp
+            },
+            'last_update': cached_data['last_update'].strftime('%Y-%m-%d %H:%M:%S IST') if cached_data['last_update'] else None
+        })
+    except Exception as e:
+        print(f"💥 Error in get_chart_data: {e}")
+        return jsonify({
+            'status': 'error',
+            'message': f'Error getting chart data: {str(e)}'
+        }), 500
 
 @app.route('/api/debug')
 def debug_api():

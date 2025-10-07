@@ -11,6 +11,8 @@
     <link href="https://cdn.datatables.net/1.13.4/css/dataTables.bootstrap5.min.css" rel="stylesheet">
     <!-- Font Awesome -->
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     
     <style>
         .meter-card {
@@ -98,7 +100,12 @@
         <!-- Navigation Tabs -->
         <ul class="nav nav-pills mb-4" id="dataTabs" role="tablist">
             <li class="nav-item" role="presentation">
-                <button class="nav-link active" id="nifty50-tab" data-bs-toggle="pill" data-bs-target="#nifty50" type="button">
+                <button class="nav-link active" id="charts-tab" data-bs-toggle="pill" data-bs-target="#charts" type="button">
+                    📈 FUTURES CHARTS & IMPACT
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="nifty50-tab" data-bs-toggle="pill" data-bs-target="#nifty50" type="button">
                     NIFTY 50 LIVE MARKET DATA
                 </button>
             </li>
@@ -121,8 +128,67 @@
 
         <!-- Tab Content -->
         <div class="tab-content" id="dataTabsContent">
+            <!-- Charts Tab -->
+            <div class="tab-pane fade show active" id="charts" role="tabpanel">
+                <div class="row mb-4">
+                    <div class="col-12">
+                        <h3 class="text-center mb-4">
+                            <i class="fas fa-chart-line text-primary"></i>
+                            Futures Impact Analysis - Whole Day View
+                        </h3>
+                    </div>
+                </div>
+                
+                <div class="row">
+                    <!-- NIFTY 50 FUTURES Chart -->
+                    <div class="col-md-6 mb-4">
+                        <div class="card h-100">
+                            <div class="card-header bg-primary text-white">
+                                <h5 class="mb-0">
+                                    <i class="fas fa-chart-area"></i> NIFTY 50 FUTURES
+                                    <span id="niftyImpactBadge" class="badge ms-2">Loading...</span>
+                                </h5>
+                            </div>
+                            <div class="card-body">
+                                <canvas id="niftyFuturesChart" width="400" height="200"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- BANK NIFTY FUTURES Chart -->
+                    <div class="col-md-6 mb-4">
+                        <div class="card h-100">
+                            <div class="card-header bg-warning text-dark">
+                                <h5 class="mb-0">
+                                    <i class="fas fa-chart-area"></i> BANK NIFTY FUTURES
+                                    <span id="bankImpactBadge" class="badge ms-2">Loading...</span>
+                                </h5>
+                            </div>
+                            <div class="card-body">
+                                <canvas id="bankFuturesChart" width="400" height="200"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Impact Legend -->
+                <div class="row">
+                    <div class="col-12">
+                        <div class="alert alert-info">
+                            <h6><i class="fas fa-info-circle"></i> Impact Legend:</h6>
+                            <div class="row">
+                                <div class="col-md-3">🟢 <strong>Strong Buy:</strong> Value > 0.7</div>
+                                <div class="col-md-3">🟡 <strong>Mild Buy:</strong> 0.3 - 0.7</div>
+                                <div class="col-md-3">🔵 <strong>Neutral:</strong> -0.3 - 0.3</div>
+                                <div class="col-md-3">🔴 <strong>Sell:</strong> Value < -0.3</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
             <!-- Nifty 50 Tab -->
-            <div class="tab-pane fade show active" id="nifty50" role="tabpanel">
+            <div class="tab-pane fade" id="nifty50" role="tabpanel">
                 <div class="row">
                     <div class="col-12">
                         <div class="table-responsive mb-4">
@@ -274,6 +340,8 @@
         // Global variables
         let dataLoaded = false;
         let dataTables = {};
+        let niftyChart = null;
+        let bankChart = null;
 
         // FIXED: Don't initialize DataTables until AFTER data is loaded
         function initializeDataTables() {
@@ -366,6 +434,131 @@
                     }
                 })
                 .catch(error => console.error('Error updating meters:', error));
+        }
+
+        // Chart creation and update functions
+        function createCharts() {
+            // Create NIFTY 50 FUTURES Chart
+            const niftyCtx = document.getElementById('niftyFuturesChart').getContext('2d');
+            niftyChart = new Chart(niftyCtx, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        label: 'NIFTY 50 Futures Meter Value',
+                        data: [],
+                        borderColor: '#0d6efd',
+                        backgroundColor: 'rgba(13, 110, 253, 0.1)',
+                        borderWidth: 3,
+                        fill: true,
+                        tension: 0.4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: false,
+                            grid: {
+                                color: 'rgba(0,0,0,0.1)'
+                            }
+                        },
+                        x: {
+                            grid: {
+                                color: 'rgba(0,0,0,0.1)'
+                            }
+                        }
+                    }
+                }
+            });
+
+            // Create BANK NIFTY FUTURES Chart
+            const bankCtx = document.getElementById('bankFuturesChart').getContext('2d');
+            bankChart = new Chart(bankCtx, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        label: 'Bank Nifty Futures Meter Value',
+                        data: [],
+                        borderColor: '#ffc107',
+                        backgroundColor: 'rgba(255, 193, 7, 0.1)',
+                        borderWidth: 3,
+                        fill: true,
+                        tension: 0.4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: false,
+                            grid: {
+                                color: 'rgba(0,0,0,0.1)'
+                            }
+                        },
+                        x: {
+                            grid: {
+                                color: 'rgba(0,0,0,0.1)'
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        function updateCharts() {
+            fetch('/api/chart-data')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        // Update chart data
+                        const niftyHistory = data.nifty_futures_history;
+                        const bankHistory = data.bank_futures_history;
+                        
+                        // Extract timestamps and values
+                        const timestamps = niftyHistory.map(point => point.timestamp);
+                        const niftyValues = niftyHistory.map(point => point.nifty_meter);
+                        const bankValues = bankHistory.map(point => point.bank_meter);
+                        
+                        // Update NIFTY chart
+                        niftyChart.data.labels = timestamps;
+                        niftyChart.data.datasets[0].data = niftyValues;
+                        niftyChart.update('none');
+                        
+                        // Update BANK chart
+                        bankChart.data.labels = timestamps;
+                        bankChart.data.datasets[0].data = bankValues;
+                        bankChart.update('none');
+                        
+                        // Update impact badges
+                        const niftyBadge = document.getElementById('niftyImpactBadge');
+                        const bankBadge = document.getElementById('bankImpactBadge');
+                        
+                        if (data.current.nifty_impact) {
+                            niftyBadge.textContent = `${data.current.nifty_impact.icon} ${data.current.nifty_impact.status}`;
+                            niftyBadge.className = `badge ms-2 bg-${data.current.nifty_impact.color}`;
+                        }
+                        
+                        if (data.current.bank_impact) {
+                            bankBadge.textContent = `${data.current.bank_impact.icon} ${data.current.bank_impact.status}`;
+                            bankBadge.className = `badge ms-2 bg-${data.current.bank_impact.color}`;
+                        }
+                    }
+                })
+                .catch(error => console.error('Error updating charts:', error));
         }
 
         // FIXED: Load data and create DataTable in correct order
@@ -511,6 +704,7 @@
                         // Update meters
                         setTimeout(() => {
                             updateMeters();
+                            updateCharts();  // Update charts with new data
                         }, 1000);
                         
                         dataLoaded = true;
@@ -532,6 +726,9 @@
         document.addEventListener('DOMContentLoaded', function() {
             // Don't initialize DataTables here - wait for data
             initializeDataTables();
+            
+            // Initialize charts
+            createCharts();
             
             // Refresh button
             document.getElementById('refreshBtn').addEventListener('click', refreshData);
