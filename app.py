@@ -18,7 +18,7 @@ app = Flask(__name__)
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
 
 # Version for cache busting - update this to force browser refresh
-APP_VERSION = "v2.2.0"
+APP_VERSION = "v2.3.0"
 CACHE_BUST_TIMESTAMP = int(datetime.now().timestamp())
 
 # IST timezone helper function
@@ -731,12 +731,14 @@ def test_oi_endpoint():
 def index():
     """Main dashboard"""
     last_update = cached_data.get('last_update')
-    last_update_display = last_update.strftime('%H:%M:%S IST') if last_update else 'Starting...'
+    show_last_update = last_update is not None
+    last_update_display = last_update.strftime('%H:%M:%S IST') if last_update else ''
     
     return render_template('index.html', 
                          app_version=APP_VERSION, 
                          cache_bust=CACHE_BUST_TIMESTAMP,
-                         last_update=last_update_display)
+                         last_update=last_update_display,
+                         show_last_update=show_last_update)
 
 @app.route('/ping')
 def ping():
