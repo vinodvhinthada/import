@@ -633,8 +633,38 @@ def auto_refresh_data():
             cached_data['bank_futures'] = fetch_market_data(BANK_NIFTY_FUTURES, "NFO")
             cached_data['last_update'] = get_ist_time()
             
+            # Update meter chart data points
+            current_time = get_ist_time()
+            
+            # Add Nifty meter data point
+            if cached_data.get('nifty_futures'):
+                nifty_meter = calculate_meter_value(cached_data['nifty_futures'])
+                meter_chart_data['nifty_history'].append({
+                    'time': current_time.strftime('%H:%M:%S'),
+                    'full_time': current_time.strftime('%Y-%m-%d %H:%M:%S'),
+                    'value': round(nifty_meter, 3),
+                    'timestamp': current_time.timestamp()
+                })
+                # Keep only last max_points
+                if len(meter_chart_data['nifty_history']) > meter_chart_data['max_points']:
+                    meter_chart_data['nifty_history'] = meter_chart_data['nifty_history'][-meter_chart_data['max_points']:]
+            
+            # Add Bank Nifty meter data point
+            if cached_data.get('bank_futures'):
+                bank_meter = calculate_meter_value(cached_data['bank_futures'])
+                meter_chart_data['bank_history'].append({
+                    'time': current_time.strftime('%H:%M:%S'),
+                    'full_time': current_time.strftime('%Y-%m-%d %H:%M:%S'),
+                    'value': round(bank_meter, 3),
+                    'timestamp': current_time.timestamp()
+                })
+                # Keep only last max_points
+                if len(meter_chart_data['bank_history']) > meter_chart_data['max_points']:
+                    meter_chart_data['bank_history'] = meter_chart_data['bank_history'][-meter_chart_data['max_points']:]
+            
             print(f"✅ Auto-refresh completed successfully at {cached_data['last_update'].strftime('%Y-%m-%d %H:%M:%S IST')}")
             print(f"📊 Data counts: Nifty50={len(cached_data['nifty_50'])}, BankNifty={len(cached_data['bank_nifty'])}, NiftyFutures={len(cached_data['nifty_futures'])}, BankFutures={len(cached_data['bank_futures'])}")
+            print(f"📈 Meter chart points: Nifty={len(meter_chart_data['nifty_history'])}, Bank={len(meter_chart_data['bank_history'])}")
             
         except Exception as e:
             print(f"💥 Auto-refresh error: {e}")
@@ -994,6 +1024,100 @@ def get_meters():
                 **get_meter_status(bank_meter)
             },
             'last_update': cached_data['last_update'].strftime('%Y-%m-%d %H:%M:%S IST') if cached_data['last_update'] else None
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+# Global storage for meter chart data
+meter_chart_data = {
+    'nifty_history': [],
+    'bank_history': [],
+    'max_points': 370  # Keep last 370 data points for comprehensive trend analysis
+}
+
+@app.route('/api/nifty-meter')
+def get_nifty_meter_chart():
+    """Get Nifty meter chart data for plotting"""
+    try:
+        current_time = get_ist_time()
+        nifty_meter = 0
+        
+        if cached_data.get('nifty_futures'):
+            nifty_meter = calculate_meter_value(cached_data['nifty_futures'])
+        
+        # Add current data point to history
+        meter_chart_data['nifty_history'].append({
+            'time': current_time.strftime('%H:%M:%S'),
+            'full_time': current_time.strftime('%Y-%m-%d %H:%M:%S'),
+            'value': round(nifty_meter, 3),
+            'timestamp': current_time.timestamp()
+        })
+        
+        # Keep only last max_points
+        if len(meter_chart_data['nifty_history']) > meter_chart_data['max_points']:
+            meter_chart_data['nifty_history'] = meter_chart_data['nifty_history'][-meter_chart_data['max_points']:]
+        
+        return jsonify({
+            'status': 'success',
+            'current_value': round(nifty_meter, 3),
+            'meter_status': get_meter_status(nifty_meter),
+            'history': meter_chart_data['nifty_history'],
+            'chart_data': {
+                'labels': [point['time'] for point in meter_chart_data['nifty_history']],
+                'values': [point['value'] for point in meter_chart_data['nifty_history']]
+            },
+            'last_update': current_time.strftime('%Y-%m-%d %H:%M:%S IST')
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/banknifty-meter')
+def get_banknifty_meter_chart():
+    """Get Bank Nifty meter chart data for plotting"""
+    try:
+        current_time = get_ist_time()
+        bank_meter = 0
+        
+        if cached_data.get('bank_futures'):
+            bank_meter = calculate_meter_value(cached_data['bank_futures'])
+        
+        # Add current data point to history
+        meter_chart_data['bank_history'].append({
+            'time': current_time.strftime('%H:%M:%S'),
+            'full_time': current_time.strftime('%Y-%m-%d %H:%M:%S'),
+            'value': round(bank_meter, 3),
+            'timestamp': current_time.timestamp()
+        })
+        
+        # Keep only last max_points
+        if len(meter_chart_data['bank_history']) > meter_chart_data['max_points']:
+            meter_chart_data['bank_history'] = meter_chart_data['bank_history'][-meter_chart_data['max_points']:]
+        
+        return jsonify({
+            'status': 'success',
+            'current_value': round(bank_meter, 3),
+            'meter_status': get_meter_status(bank_meter),
+            'history': meter_chart_data['bank_history'],
+            'chart_data': {
+                'labels': [point['time'] for point in meter_chart_data['bank_history']],
+                'values': [point['value'] for point in meter_chart_data['bank_history']]
+            },
+            'last_update': current_time.strftime('%Y-%m-%d %H:%M:%S IST')
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/clear-meter-history', methods=['POST'])
+def clear_meter_history():
+    """Clear meter chart history"""
+    try:
+        meter_chart_data['nifty_history'].clear()
+        meter_chart_data['bank_history'].clear()
+        
+        return jsonify({
+            'status': 'success',
+            'message': 'Meter chart history cleared successfully',
+            'timestamp': get_ist_time().strftime('%Y-%m-%d %H:%M:%S IST')
         })
     except Exception as e:
         return jsonify({'error': str(e)}), 500
