@@ -612,29 +612,30 @@ def is_market_open():
     return market_start <= current_minutes <= market_end
 
 def auto_refresh_data():
-    """Automatically refresh market data during market hours"""
-    if is_market_open():
-        try:
-            print(f"🔄 Auto-refresh triggered at {get_ist_time().strftime('%Y-%m-%d %H:%M:%S IST')}")
-            
-            # Authenticate if needed
-            if not cached_data.get('auth_token'):
-                print("🔑 Auto-refresh: Authenticating...")
-                if not authenticate():
-                    print("❌ Auto-refresh: Authentication failed")
-                    return
-            
-            # Fetch all data
-            print("📊 Auto-refresh: Fetching market data...")
-            cached_data['nifty_50'] = fetch_market_data(NIFTY_50_STOCKS, "NSE")
-            cached_data['bank_nifty'] = fetch_market_data(BANK_NIFTY_STOCKS, "NSE")
-            cached_data['pcr_data'] = fetch_pcr_data()
-            cached_data['nifty_futures'] = fetch_market_data(NIFTY_50_FUTURES, "NFO")
-            cached_data['bank_futures'] = fetch_market_data(BANK_NIFTY_FUTURES, "NFO")
-            cached_data['last_update'] = get_ist_time()
-            
-            # Update meter chart data points
-            current_time = get_ist_time()
+    """Automatically refresh market data every 5 minutes"""
+    try:
+        print(f"🔄 Auto-refresh triggered at {get_ist_time().strftime('%Y-%m-%d %H:%M:%S IST')}")
+        
+        # Authenticate if needed
+        if not cached_data.get('auth_token'):
+            print("🔑 Auto-refresh: Authenticating...")
+            if not authenticate():
+                print("❌ Auto-refresh: Authentication failed")
+                return
+        
+        # Fetch all data (always refresh regardless of market hours)
+        print("📊 Auto-refresh: Fetching market data...")
+        cached_data['nifty_50'] = fetch_market_data(NIFTY_50_STOCKS, "NSE")
+        cached_data['bank_nifty'] = fetch_market_data(BANK_NIFTY_STOCKS, "NSE")
+        cached_data['pcr_data'] = fetch_pcr_data()
+        cached_data['nifty_futures'] = fetch_market_data(NIFTY_50_FUTURES, "NFO")
+        cached_data['bank_futures'] = fetch_market_data(BANK_NIFTY_FUTURES, "NFO")
+        cached_data['last_update'] = get_ist_time()
+        
+        # Only update meter chart data during market hours
+        current_time = get_ist_time()
+        if is_market_open():
+            print("📈 Market is open - Adding meter chart data points")
             
             # Add Nifty meter data point
             if cached_data.get('nifty_futures'):
@@ -662,28 +663,26 @@ def auto_refresh_data():
                 if len(meter_chart_data['bank_history']) > meter_chart_data['max_points']:
                     meter_chart_data['bank_history'] = meter_chart_data['bank_history'][-meter_chart_data['max_points']:]
             
-            print(f"✅ Auto-refresh completed successfully at {cached_data['last_update'].strftime('%Y-%m-%d %H:%M:%S IST')}")
-            print(f"📊 Data counts: Nifty50={len(cached_data['nifty_50'])}, BankNifty={len(cached_data['bank_nifty'])}, NiftyFutures={len(cached_data['nifty_futures'])}, BankFutures={len(cached_data['bank_futures'])}")
-            print(f"📈 Meter chart points: Nifty={len(meter_chart_data['nifty_history'])}, Bank={len(meter_chart_data['bank_history'])}")
-            
-        except Exception as e:
-            print(f"💥 Auto-refresh error: {e}")
-    else:
-        print(f"🕐 Market closed - Auto-refresh skipped at {get_ist_time().strftime('%Y-%m-%d %H:%M:%S IST')}")
+            print(f"📈 Meter chart points added: Nifty={len(meter_chart_data['nifty_history'])}, Bank={len(meter_chart_data['bank_history'])}")
+        else:
+            print("🕐 Market closed - Skipping meter chart updates (data still refreshed)")
+        
+        print(f"✅ Auto-refresh completed successfully at {cached_data['last_update'].strftime('%Y-%m-%d %H:%M:%S IST')}")
+        print(f"📊 Data counts: Nifty50={len(cached_data['nifty_50'])}, BankNifty={len(cached_data['bank_nifty'])}, NiftyFutures={len(cached_data['nifty_futures'])}, BankFutures={len(cached_data['bank_futures'])}")
+        
+    except Exception as e:
+        print(f"💥 Auto-refresh error: {e}")
 
 def schedule_auto_refresh():
     """Set up the automatic refresh schedule"""
-    print("⏰ Setting up auto-refresh schedule: Every 5 minutes during market hours (9:00 AM - 3:30 PM IST)")
+    print("⏰ Setting up auto-refresh schedule: Every 5 minutes (data always refreshed, charts plotted during market hours 9:00 AM - 3:30 PM IST)")
     
     # Schedule refresh every 5 minutes
     schedule.every(5).minutes.do(auto_refresh_data)
     
-    # Run initial refresh if market is open
-    if is_market_open():
-        print("🚀 Market is open - Running initial auto-refresh...")
-        auto_refresh_data()
-    else:
-        print("🕐 Market is closed - Auto-refresh will start when market opens")
+    # Run initial refresh immediately (data always refreshed now)
+    print("🚀 Running initial auto-refresh (data refresh + conditional chart plotting)...")
+    auto_refresh_data()
 
 def run_scheduler():
     """Run the scheduler in a background thread"""
@@ -1128,6 +1127,95 @@ def clear_meter_history():
         })
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+@app.route('/test-ui')
+def test_ui():
+    """Test page to debug frontend issues"""
+    return f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Frontend Debug Test</title>
+        <style>
+            body {{ font-family: Arial, sans-serif; margin: 20px; }}
+            .status {{ padding: 10px; margin: 10px 0; border: 1px solid #ddd; }}
+            button {{ padding: 10px 20px; margin: 5px; }}
+        </style>
+    </head>
+    <body>
+        <h1>Frontend Debug Test</h1>
+        
+        <div class="status">
+            <strong>Last Update:</strong> <span id="lastUpdate">Not loaded</span>
+        </div>
+        
+        <div class="status">
+            <strong>Auto-refresh:</strong> <span id="autoRefreshStatus">Checking...</span>
+        </div>
+        
+        <button onclick="testAutoRefreshStatus()">Test Auto-Refresh Status</button>
+        <button onclick="testRefreshData()">Test Refresh Data</button>
+        
+        <div id="debugOutput" style="background: #f5f5f5; padding: 10px; margin: 10px 0; white-space: pre-wrap;"></div>
+        
+        <script>
+            function log(message) {{
+                const output = document.getElementById('debugOutput');
+                output.textContent += new Date().toLocaleTimeString() + ': ' + message + '\\n';
+            }}
+            
+            function testAutoRefreshStatus() {{
+                log('Testing auto-refresh status...');
+                fetch('/api/auto-refresh/status')
+                    .then(response => {{
+                        log('Response status: ' + response.status);
+                        return response.json();
+                    }})
+                    .then(data => {{
+                        log('Data received: ' + JSON.stringify(data, null, 2));
+                        
+                        const statusElement = document.getElementById('autoRefreshStatus');
+                        const lastUpdateElement = document.getElementById('lastUpdate');
+                        
+                        if (data.market_open) {{
+                            statusElement.textContent = 'Auto-refresh: ON (5 min)';
+                        }} else {{
+                            statusElement.textContent = 'Auto-refresh: Market Closed';
+                        }}
+                        
+                        if (data.last_update) {{
+                            lastUpdateElement.textContent = 'Last Update: ' + data.last_update;
+                        }} else {{
+                            lastUpdateElement.textContent = 'Last Update: Not loaded';
+                        }}
+                    }})
+                    .catch(error => {{
+                        log('Error: ' + error);
+                    }});
+            }}
+            
+            function testRefreshData() {{
+                log('Testing refresh data...');
+                fetch('/api/refresh-data')
+                    .then(response => response.json())
+                    .then(data => {{
+                        log('Refresh result: ' + JSON.stringify(data, null, 2));
+                        testAutoRefreshStatus(); // Test status after refresh
+                    }})
+                    .catch(error => {{
+                        log('Refresh error: ' + error);
+                    }});
+            }}
+            
+            // Auto-test on load
+            window.onload = function() {{
+                log('Page loaded, testing auto-refresh status...');
+                testAutoRefreshStatus();
+            }};
+        </script>
+    </body>
+    </html>
+    """
 
 @app.route('/api/auto-refresh/status')
 def auto_refresh_status():
