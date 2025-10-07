@@ -80,10 +80,7 @@
                         <i class="fas fa-sync-alt"></i> Refresh Data
                     </button>
                     <span class="badge bg-secondary">{{ app_version }}</span>
-                    <span id="lastUpdate" class="text-muted">Last Update: Not loaded</span>
-                    <span id="autoRefreshStatus" class="badge bg-info">
-                        <i class="fas fa-clock"></i> Auto-refresh: Checking...
-                    </span>
+                    <span id="lastUpdate" class="text-muted">Last Update: Loading...</span>
                 </div>
             </div>
         </div>
@@ -470,84 +467,21 @@
                 .catch(error => console.error('Error updating meters:', error));
         }
 
-        // Update auto-refresh status with aggressive cache busting
-        function updateAutoRefreshStatus() {
+        // Update last update timestamp only - background refresh happens silently
+        function updateLastUpdate() {
             const timestamp = new Date().getTime();
-            const appVersion = document.querySelector('meta[name="app-version"]').content;
-            const cacheBust = document.querySelector('meta[name="cache-bust"]').content;
-            console.log('🔄 updateAutoRefreshStatus called at', timestamp, 'version:', appVersion);
             
-            fetch(`/api/auto-refresh/status?_t=${timestamp}&v=${appVersion}&cb=${cacheBust}`)
-                .then(response => {
-                    console.log('📡 Auto-refresh status response:', response.status);
-                    if (!response.ok) {
-                        throw new Error(`HTTP ${response.status}`);
-                    }
-                    return response.json();
-                })
+            fetch(`/api/auto-refresh/status?_t=${timestamp}`)
+                .then(response => response.json())
                 .then(data => {
-                    console.log('📊 Auto-refresh data received:', data);
-                    const statusElement = document.getElementById('autoRefreshStatus');
                     const lastUpdateElement = document.getElementById('lastUpdate');
-                    
-                    if (!statusElement || !lastUpdateElement) {
-                        console.error('🚫 Status elements not found!');
-                        return;
-                    }
-                    
-                    // Force display update with server timestamp
-                    console.log('🎯 Server timestamp:', data.timestamp, 'Scheduler active:', data.scheduler_active);
-                    
-                    // Always show as active if scheduler is running
-                    if (data.scheduler_active) {
-                        statusElement.className = 'badge bg-success';
-                        if (data.market_open) {
-                            statusElement.innerHTML = '<i class="fas fa-sync-alt fa-spin"></i> Auto-refresh: ON (Charts plotting)';
-                        } else {
-                            statusElement.innerHTML = '<i class="fas fa-sync-alt fa-spin"></i> Auto-refresh: ON (Data only)';
-                        }
-                    } else {
-                        statusElement.className = 'badge bg-secondary';
-                        statusElement.innerHTML = '<i class="fas fa-clock"></i> Auto-refresh: OFF';
-                    }
-                    
-                    // Update last update time with detailed info
-                    if (data.last_update) {
-                        const displayText = `Last Update: ${data.last_update_short || data.last_update}`;
-                        lastUpdateElement.textContent = displayText;
+                    if (lastUpdateElement && data.last_update) {
+                        lastUpdateElement.textContent = `Last Update: ${data.last_update_short || data.last_update}`;
                         lastUpdateElement.className = 'text-success';
-                        console.log('✅ Last update set to:', data.last_update);
-                        
-                        // Add data counts for verification
-                        if (data.data_counts) {
-                            const counts = data.data_counts;
-                            console.log('📊 Data counts:', counts);
-                            lastUpdateElement.title = `Nifty50: ${counts.nifty_50}, Bank: ${counts.bank_nifty}, Futures: ${counts.nifty_futures}, Bank Futures: ${counts.bank_futures}`;
-                        }
-                    } else {
-                        lastUpdateElement.textContent = 'Last Update: Not loaded';
-                        lastUpdateElement.className = 'text-muted';
-                        console.log('⚠️ No last_update in data');
                     }
-                    
-                    // Force DOM update
-                    statusElement.style.display = 'none';
-                    statusElement.offsetHeight; // Trigger reflow
-                    statusElement.style.display = '';
                 })
                 .catch(error => {
-                    console.error('💥 Error in updateAutoRefreshStatus:', error);
-                    const statusElement = document.getElementById('autoRefreshStatus');
-                    const lastUpdateElement = document.getElementById('lastUpdate');
-                    
-                    if (statusElement && lastUpdateElement) {
-                        statusElement.className = 'badge bg-warning';
-                        statusElement.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Auto-refresh: Error';
-                        lastUpdateElement.textContent = 'Last Update: Error checking';
-                        lastUpdateElement.className = 'text-warning';
-                    }
-                    
-                    console.error('Error checking auto-refresh status:', error);
+                    console.log('Update check failed (app may be starting):', error.message);
                 });
         }
 
@@ -715,20 +649,16 @@
         document.addEventListener('DOMContentLoaded', function() {
             // Version logging for cache verification
             const appVersion = document.querySelector('meta[name="app-version"]').content;
-            const cacheBust = document.querySelector('meta[name="cache-bust"]').content;
-            console.log('🚀 Angel One Dashboard Loaded!');
-            console.log('📦 App Version:', appVersion);
-            console.log('🔄 Cache Bust:', cacheBust);
-            console.log('⏰ Load Time:', new Date().toLocaleString());
+            console.log('🚀 Angel One Dashboard v' + appVersion + ' - Silent Background Refresh Active');
             
             // Don't initialize DataTables here - wait for data
             initializeDataTables();
             
-            // Update auto-refresh status immediately
-            updateAutoRefreshStatus();
+            // Update last update time immediately  
+            updateLastUpdate();
             
-            // Update auto-refresh status every 30 seconds
-            setInterval(updateAutoRefreshStatus, 30000);
+            // Update last update time every 30 seconds
+            setInterval(updateLastUpdate, 30000);
             
             // Refresh button
             document.getElementById('refreshBtn').addEventListener('click', refreshData);

@@ -18,7 +18,7 @@ app = Flask(__name__)
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
 
 # Version for cache busting - update this to force browser refresh
-APP_VERSION = "v2.1.0"
+APP_VERSION = "v2.2.0"
 CACHE_BUST_TIMESTAMP = int(datetime.now().timestamp())
 
 # IST timezone helper function
