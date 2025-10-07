@@ -730,9 +730,13 @@ def test_oi_endpoint():
 @app.route('/')
 def index():
     """Main dashboard"""
+    last_update = cached_data.get('last_update')
+    last_update_display = last_update.strftime('%H:%M:%S IST') if last_update else 'Starting...'
+    
     return render_template('index.html', 
                          app_version=APP_VERSION, 
-                         cache_bust=CACHE_BUST_TIMESTAMP)
+                         cache_bust=CACHE_BUST_TIMESTAMP,
+                         last_update=last_update_display)
 
 @app.route('/ping')
 def ping():
@@ -1230,6 +1234,33 @@ def test_ui():
     </body>
     </html>
     """
+
+@app.route('/test-simple')
+def test_simple():
+    """Simple test to verify last update timestamp"""
+    try:
+        current_time = get_ist_time()
+        return f'''
+        <h1>Simple Test</h1>
+        <p>Current Server Time: {current_time.strftime('%Y-%m-%d %H:%M:%S IST')}</p>
+        <p>Last Update: {cached_data.get('last_update', 'None').strftime('%Y-%m-%d %H:%M:%S IST') if cached_data.get('last_update') else 'No data cached'}</p>
+        <button onclick="testAPI()">Test API</button>
+        <div id="result"></div>
+        <script>
+        function testAPI() {{
+            fetch('/api/auto-refresh/status?_t=' + Date.now())
+                .then(r => r.json())
+                .then(data => {{
+                    document.getElementById('result').innerHTML = '<pre>' + JSON.stringify(data, null, 2) + '</pre>';
+                }})
+                .catch(e => {{
+                    document.getElementById('result').innerHTML = 'Error: ' + e.message;
+                }});
+        }}
+        </script>
+        '''
+    except Exception as e:
+        return f"Error: {e}"
 
 @app.route('/test-status')
 def test_status():
