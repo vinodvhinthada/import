@@ -17,6 +17,10 @@ from werkzeug.exceptions import RequestEntityTooLarge
 app = Flask(__name__)
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
 
+# Version for cache busting - update this to force browser refresh
+APP_VERSION = "v2.1.0"
+CACHE_BUST_TIMESTAMP = int(datetime.now().timestamp())
+
 # IST timezone helper function
 def get_ist_time():
     """Get current time in Indian Standard Time (IST)"""
@@ -726,7 +730,9 @@ def test_oi_endpoint():
 @app.route('/')
 def index():
     """Main dashboard"""
-    return render_template('index.html')
+    return render_template('index.html', 
+                         app_version=APP_VERSION, 
+                         cache_bust=CACHE_BUST_TIMESTAMP)
 
 @app.route('/ping')
 def ping():
