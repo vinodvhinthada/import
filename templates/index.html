@@ -470,6 +470,8 @@
                 .then(response => response.json())
                 .then(data => {
                     const statusElement = document.getElementById('autoRefreshStatus');
+                    const lastUpdateElement = document.getElementById('lastUpdate');
+                    
                     if (data.market_open) {
                         statusElement.className = 'badge bg-success';
                         statusElement.innerHTML = '<i class="fas fa-sync-alt fa-spin"></i> Auto-refresh: ON (5 min)';
@@ -477,11 +479,25 @@
                         statusElement.className = 'badge bg-secondary';
                         statusElement.innerHTML = '<i class="fas fa-clock"></i> Auto-refresh: Market Closed';
                     }
+                    
+                    // Update last update time
+                    if (data.last_update) {
+                        lastUpdateElement.textContent = `Last Update: ${data.last_update}`;
+                        lastUpdateElement.className = 'text-success';
+                    } else {
+                        lastUpdateElement.textContent = 'Last Update: Not loaded';
+                        lastUpdateElement.className = 'text-muted';
+                    }
                 })
                 .catch(error => {
                     const statusElement = document.getElementById('autoRefreshStatus');
+                    const lastUpdateElement = document.getElementById('lastUpdate');
+                    
                     statusElement.className = 'badge bg-warning';
                     statusElement.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Auto-refresh: Error';
+                    lastUpdateElement.textContent = 'Last Update: Error checking';
+                    lastUpdateElement.className = 'text-warning';
+                    
                     console.error('Error checking auto-refresh status:', error);
                 });
         }
