@@ -467,12 +467,17 @@
                 .catch(error => console.error('Error updating meters:', error));
         }
 
-        // Update auto-refresh status
+        // Update auto-refresh status with cache busting
         function updateAutoRefreshStatus() {
-            console.log('🔄 updateAutoRefreshStatus called');
-            fetch('/api/auto-refresh/status')
+            const timestamp = new Date().getTime();
+            console.log('🔄 updateAutoRefreshStatus called at', timestamp);
+            
+            fetch(`/api/auto-refresh/status?_t=${timestamp}`)
                 .then(response => {
                     console.log('📡 Auto-refresh status response:', response.status);
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}`);
+                    }
                     return response.json();
                 })
                 .then(data => {
@@ -480,7 +485,13 @@
                     const statusElement = document.getElementById('autoRefreshStatus');
                     const lastUpdateElement = document.getElementById('lastUpdate');
                     
-                    console.log('🎯 Found elements:', !!statusElement, !!lastUpdateElement);
+                    if (!statusElement || !lastUpdateElement) {
+                        console.error('🚫 Status elements not found!');
+                        return;
+                    }
+                    
+                    // Force display update with server timestamp
+                    console.log('🎯 Server timestamp:', data.timestamp, 'Scheduler active:', data.scheduler_active);
                     
                     // Always show as active if scheduler is running
                     if (data.scheduler_active) {
@@ -495,26 +506,41 @@
                         statusElement.innerHTML = '<i class="fas fa-clock"></i> Auto-refresh: OFF';
                     }
                     
-                    // Update last update time
+                    // Update last update time with detailed info
                     if (data.last_update) {
-                        lastUpdateElement.textContent = `Last Update: ${data.last_update}`;
+                        const displayText = `Last Update: ${data.last_update_short || data.last_update}`;
+                        lastUpdateElement.textContent = displayText;
                         lastUpdateElement.className = 'text-success';
                         console.log('✅ Last update set to:', data.last_update);
+                        
+                        // Add data counts for verification
+                        if (data.data_counts) {
+                            const counts = data.data_counts;
+                            console.log('📊 Data counts:', counts);
+                            lastUpdateElement.title = `Nifty50: ${counts.nifty_50}, Bank: ${counts.bank_nifty}, Futures: ${counts.nifty_futures}, Bank Futures: ${counts.bank_futures}`;
+                        }
                     } else {
                         lastUpdateElement.textContent = 'Last Update: Not loaded';
                         lastUpdateElement.className = 'text-muted';
                         console.log('⚠️ No last_update in data');
                     }
+                    
+                    // Force DOM update
+                    statusElement.style.display = 'none';
+                    statusElement.offsetHeight; // Trigger reflow
+                    statusElement.style.display = '';
                 })
                 .catch(error => {
                     console.error('💥 Error in updateAutoRefreshStatus:', error);
                     const statusElement = document.getElementById('autoRefreshStatus');
                     const lastUpdateElement = document.getElementById('lastUpdate');
                     
-                    statusElement.className = 'badge bg-warning';
-                    statusElement.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Auto-refresh: Error';
-                    lastUpdateElement.textContent = 'Last Update: Error checking';
-                    lastUpdateElement.className = 'text-warning';
+                    if (statusElement && lastUpdateElement) {
+                        statusElement.className = 'badge bg-warning';
+                        statusElement.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Auto-refresh: Error';
+                        lastUpdateElement.textContent = 'Last Update: Error checking';
+                        lastUpdateElement.className = 'text-warning';
+                    }
                     
                     console.error('Error checking auto-refresh status:', error);
                 });

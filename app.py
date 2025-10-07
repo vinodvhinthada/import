@@ -858,10 +858,11 @@ def refresh_data():
         
         print("✅ Data refresh completed successfully!")
         
-        return jsonify({
+        response_data = {
             'status': 'success',
             'message': 'Data refreshed successfully',
             'timestamp': cached_data['last_update'].strftime('%Y-%m-%d %H:%M:%S IST'),
+            'cache_bust': int(get_ist_time().timestamp() * 1000),
             'data': {
                 'nifty_50': cached_data['nifty_50'],
                 'bank_nifty': cached_data['bank_nifty'],
@@ -876,7 +877,14 @@ def refresh_data():
                 'nifty_futures': len(cached_data['nifty_futures']),
                 'bank_futures': len(cached_data['bank_futures'])
             }
-        })
+        }
+        
+        response = jsonify(response_data)
+        response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+        response.headers['Pragma'] = 'no-cache'
+        response.headers['Expires'] = '0'
+        
+        return response
     except Exception as e:
         print(f"💥 Error in refresh_data: {e}")
         return jsonify({
@@ -1217,28 +1225,162 @@ def test_ui():
     </html>
     """
 
+@app.route('/test-status')
+def test_status():
+    """Simple test page to verify cache-independent status display"""
+    return '''
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Cache-Independent Status Test</title>
+        <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+        <meta http-equiv="Pragma" content="no-cache">
+        <meta http-equiv="Expires" content="0">
+    </head>
+    <body style="font-family: Arial; padding: 20px;">
+        <h1>🧪 Cache-Independent Status Test</h1>
+        
+        <div style="border: 2px solid #007bff; padding: 15px; margin: 10px 0; border-radius: 5px;">
+            <div><strong>Status:</strong> <span id="autoRefreshStatus" style="color: orange;">Checking...</span></div>
+            <div><strong>Last Update:</strong> <span id="lastUpdate" style="color: orange;">Loading...</span></div>
+        </div>
+        
+        <button onclick="updateStatus()" style="padding: 10px 20px; margin: 5px; background: #007bff; color: white; border: none; border-radius: 3px; cursor: pointer;">🔄 Check Status</button>
+        <button onclick="triggerRefresh()" style="padding: 10px 20px; margin: 5px; background: #28a745; color: white; border: none; border-radius: 3px; cursor: pointer;">📊 Trigger Refresh</button>
+        
+        <div id="debugLog" style="margin-top: 20px; padding: 10px; background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 5px; max-height: 300px; overflow-y: auto; font-family: monospace; font-size: 12px;"></div>
+        
+        <script>
+        function log(message) {
+            const logDiv = document.getElementById('debugLog');
+            const timestamp = new Date().toLocaleTimeString();
+            logDiv.innerHTML += `<div>[${timestamp}] ${message}</div>`;
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+        
+        function updateStatus() {
+            const timestamp = new Date().getTime();
+            log(`🔄 Fetching status with cache-bust timestamp: ${timestamp}`);
+            
+            fetch(`/api/auto-refresh/status?_t=${timestamp}`)
+                .then(response => {
+                    log(`📡 Response status: ${response.status}`);
+                    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                    return response.json();
+                })
+                .then(data => {
+                    log(`📊 Server response: ${JSON.stringify(data, null, 2)}`);
+                    
+                    const statusElement = document.getElementById('autoRefreshStatus');
+                    const lastUpdateElement = document.getElementById('lastUpdate');
+                    
+                    if (data.scheduler_active) {
+                        statusElement.style.color = 'green';
+                        if (data.market_open) {
+                            statusElement.textContent = '✅ Auto-refresh: ON (Charts plotting)';
+                        } else {
+                            statusElement.textContent = '✅ Auto-refresh: ON (Data only)';
+                        }
+                    } else {
+                        statusElement.style.color = 'red';
+                        statusElement.textContent = '❌ Auto-refresh: OFF';
+                    }
+                    
+                    if (data.last_update) {
+                        lastUpdateElement.style.color = 'green';
+                        lastUpdateElement.textContent = `${data.last_update_short || data.last_update}`;
+                    } else {
+                        lastUpdateElement.style.color = 'gray';
+                        lastUpdateElement.textContent = 'Not loaded';
+                    }
+                    
+                    log(`✅ Status updated successfully`);
+                })
+                .catch(error => {
+                    log(`💥 Error: ${error}`);
+                    document.getElementById('autoRefreshStatus').textContent = '❌ Error';
+                    document.getElementById('autoRefreshStatus').style.color = 'red';
+                    document.getElementById('lastUpdate').textContent = 'Error checking status';
+                    document.getElementById('lastUpdate').style.color = 'red';
+                });
+        }
+        
+        function triggerRefresh() {
+            log('🔄 Triggering manual refresh...');
+            fetch('/api/refresh-data')
+                .then(response => {
+                    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                    return response.json();
+                })
+                .then(data => {
+                    log(`✅ Manual refresh completed: ${data.message}`);
+                    log(`📊 Cache bust: ${data.cache_bust}`);
+                    setTimeout(updateStatus, 1000); // Wait 1 second then check status
+                })
+                .catch(error => log(`💥 Refresh error: ${error}`));
+        }
+        
+        // Auto-update every 10 seconds
+        setInterval(updateStatus, 10000);
+        
+        // Initial load
+        log('🚀 Page loaded - initializing...');
+        updateStatus();
+        </script>
+    </body>
+    </html>
+    '''
+
 @app.route('/api/auto-refresh/status')
 def auto_refresh_status():
-    """Get auto-refresh status"""
+    """Get auto-refresh status with cache-busting"""
     try:
         current_time = get_ist_time()
         market_open = is_market_open()
         
-        return jsonify({
+        # Calculate next refresh time
+        next_refresh = "calculating..."
+        if cached_data.get('last_update'):
+            next_time = cached_data['last_update'] + timedelta(minutes=5)
+            next_refresh = next_time.strftime('%H:%M:%S IST')
+        
+        response_data = {
             'status': 'ok',
+            'timestamp': int(current_time.timestamp() * 1000),  # Cache busting
             'auto_refresh_enabled': True,
             'market_open': market_open,
             'current_time': current_time.strftime('%Y-%m-%d %H:%M:%S IST'),
+            'current_time_short': current_time.strftime('%H:%M:%S IST'),
             'market_hours': '9:00 AM - 3:30 PM IST (Mon-Fri)',
             'refresh_interval': '5 minutes',
             'last_update': cached_data['last_update'].strftime('%Y-%m-%d %H:%M:%S IST') if cached_data.get('last_update') else None,
-            'scheduler_active': scheduler_thread and scheduler_thread.is_alive() if scheduler_thread else False
-        })
+            'last_update_short': cached_data['last_update'].strftime('%H:%M:%S IST') if cached_data.get('last_update') else None,
+            'next_refresh': next_refresh,
+            'scheduler_active': scheduler_thread and scheduler_thread.is_alive() if scheduler_thread else False,
+            'data_counts': {
+                'nifty_50': len(cached_data.get('nifty_50', [])),
+                'bank_nifty': len(cached_data.get('bank_nifty', [])),
+                'nifty_futures': len(cached_data.get('nifty_futures', [])),
+                'bank_futures': len(cached_data.get('bank_futures', []))
+            }
+        }
+        
+        # Create response with cache-busting headers
+        response = jsonify(response_data)
+        response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+        response.headers['Pragma'] = 'no-cache'
+        response.headers['Expires'] = '0'
+        
+        return response
+        
     except Exception as e:
-        return jsonify({
+        response = jsonify({
             'status': 'error',
+            'timestamp': int(get_ist_time().timestamp() * 1000),
             'error': str(e)
-        }), 500
+        })
+        response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+        return response, 500
 
 @app.route('/api/auto-refresh/trigger')
 def trigger_auto_refresh():
